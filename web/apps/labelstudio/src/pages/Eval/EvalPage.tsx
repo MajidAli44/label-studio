@@ -19,6 +19,21 @@ interface Project {
   title: string;
 }
 
+interface Evaluation {
+  id: number;
+  project_title: string;
+  llm_model: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  created_at: string;
+  accuracy_percentage?: number;
+  labeled_tasks: number;
+  total_tasks: number;
+  correct_labels: number;
+  incorrect_labels: number;
+  error_message?: string;
+  results?: any;
+}
+
 export const EvalPage: Page = () => {
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [apiKey, setApiKey] = useState<string>("");
@@ -26,6 +41,9 @@ export const EvalPage: Page = () => {
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [loadingProjects, setLoadingProjects] = useState<boolean>(true);
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [currentEvaluation, setCurrentEvaluation] = useState<Evaluation | null>(null);
+  const [showResults, setShowResults] = useState<boolean>(false);
 
   const api = useContext(ApiContext);
 
@@ -58,26 +76,94 @@ export const EvalPage: Page = () => {
     fetchProjects();
   }, [api]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedModel || !apiKey.trim() || !systemPrompt.trim() || !selectedProject) {
       alert("Please fill in all required fields");
       return;
     }
 
-    console.log("Eval Configuration:", {
-      model: selectedModel,
-      apiKey,
-      systemPrompt,
-      projectId: selectedProject,
-    });
+    if (!api) {
+      alert("API not available");
+      return;
+    }
 
-    // Reset form after submission
-    setSelectedModel("");
-    setApiKey("");
-    setSystemPrompt("");
-    setSelectedProject("");
-    
-    alert("Evaluation created successfully!");
+    try {
+      setSubmitting(true);
+      
+      // Create evaluation using direct fetch since API proxy may not have this endpoint yet
+      const response = await fetch('/api/evaluations/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          project_id: parseInt(selectedProject),
+          llm_model: selectedModel,
+          system_prompt: systemPrompt,
+          api_key: apiKey,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || error.detail || 'Failed to create evaluation');
+      }
+
+      const evaluation: Evaluation = await response.json();
+      
+      setCurrentEvaluation(evaluation);
+      setShowResults(true);
+      
+      // Reset form
+      setSelectedModel("");
+      setApiKey("");
+      setSystemPrompt("");
+      setSelectedProject("");
+      
+      // Poll for results if evaluation is running
+      if (evaluation.status === 'pending' || evaluation.status === 'running') {
+        pollEvaluationStatus(evaluation.id);
+      }
+    } catch (error: any) {
+      console.error("Failed to create evaluation:", error);
+      alert(`Failed to create evaluation: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const pollEvaluationStatus = async (evaluationId: number) => {
+    const maxAttempts = 60; // Poll for up to 5 minutes
+    let attempts = 0;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        attempts++;
+        
+        const response = await fetch(`/api/evaluations/${evaluationId}/`, {
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const evaluation: Evaluation = await response.json();
+          setCurrentEvaluation(evaluation);
+          
+          // Stop polling if completed or failed
+          if (evaluation.status === 'completed' || evaluation.status === 'failed') {
+            clearInterval(pollInterval);
+          }
+        }
+
+        // Stop after max attempts
+        if (attempts >= maxAttempts) {
+          clearInterval(pollInterval);
+        }
+      } catch (error) {
+        console.error("Failed to poll evaluation status:", error);
+        clearInterval(pollInterval);
+      }
+    }, 5000); // Poll every 5 seconds
   };
 
   const isFormValid = selectedModel && apiKey.trim() && systemPrompt.trim() && selectedProject;
@@ -265,7 +351,7 @@ export const EvalPage: Page = () => {
           <div className="eval-page__actions" style={{ marginTop: '48px', paddingTop: '36px', borderTop: '2px solid #e8e8e8', display: 'flex', justifyContent: 'center' }}>
             <Button 
               onClick={handleSubmit} 
-              disabled={!isFormValid}
+              disabled={!isFormValid || submitting}
               style={{ 
                 minWidth: '220px', 
                 padding: '14px 40px', 
@@ -273,14 +359,108 @@ export const EvalPage: Page = () => {
                 fontWeight: 600, 
                 borderRadius: '8px', 
                 transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', 
-                boxShadow: !isFormValid ? 'none' : '0 2px 8px rgba(24, 144, 255, 0.2)'
+                boxShadow: (!isFormValid || submitting) ? 'none' : '0 2px 8px rgba(24, 144, 255, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
               }}
             >
-              Create Evaluation
+              {submitting && <Spinner size={16} />}
+              {submitting ? 'Creating Evaluation...' : 'Create Evaluation'}
             </Button>
           </div>
         </div>
       </div>
+
+      {/* Results Section */}
+      {showResults && currentEvaluation && (
+        <div style={{ marginTop: '32px', background: '#ffffff', border: '1px solid #e0e0e0', borderRadius: '12px', padding: '32px', boxShadow: '0 4px 16px rgba(0, 0, 0, 0.06)' }}>
+          <div style={{ marginBottom: '24px', paddingBottom: '16px', borderBottom: '2px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#1a1a1a', margin: 0 }}>Evaluation Results</h2>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {currentEvaluation.status === 'pending' && (
+                <><Spinner size={16} /><span style={{ fontSize: '14px', color: '#1890ff', fontWeight: 600 }}>Pending...</span></>
+              )}
+              {currentEvaluation.status === 'running' && (
+                <><Spinner size={16} /><span style={{ fontSize: '14px', color: '#1890ff', fontWeight: 600 }}>Running...</span></>
+              )}
+              {currentEvaluation.status === 'completed' && (
+                <span style={{ padding: '6px 16px', background: '#f6ffed', color: '#52c41a', borderRadius: '12px', fontSize: '12px', fontWeight: 700 }}>COMPLETED</span>
+              )}
+              {currentEvaluation.status === 'failed' && (
+                <span style={{ padding: '6px 16px', background: '#fff1f0', color: '#ff4d4f', borderRadius: '12px', fontSize: '12px', fontWeight: 700 }}>FAILED</span>
+              )}
+            </div>
+          </div>
+
+          {/* Summary Stats */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+            <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 600, marginBottom: '8px' }}>PROJECT</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a1a' }}>{currentEvaluation.project_title}</div>
+            </div>
+            <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 600, marginBottom: '8px' }}>MODEL</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a1a' }}>{currentEvaluation.llm_model}</div>
+            </div>
+            <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 600, marginBottom: '8px' }}>TOTAL TASKS</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a1a' }}>{currentEvaluation.total_tasks}</div>
+            </div>
+            <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 600, marginBottom: '8px' }}>LABELED TASKS</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a1a' }}>{currentEvaluation.labeled_tasks}</div>
+            </div>
+          </div>
+
+          {/* Accuracy Display for Completed Evaluations */}
+          {currentEvaluation.status === 'completed' && (
+            <>
+              <div style={{ padding: '24px', background: 'linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%)', borderRadius: '12px', marginBottom: '24px', border: '2px solid #91d5ff' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '14px', color: '#0066cc', fontWeight: 600, marginBottom: '8px' }}>ACCURACY SCORE</div>
+                  <div style={{ fontSize: '48px', fontWeight: 700, color: '#1890ff', marginBottom: '8px' }}>
+                    {currentEvaluation.accuracy_percentage?.toFixed(1) || 0}%
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#595959' }}>
+                    {currentEvaluation.correct_labels} correct out of {currentEvaluation.labeled_tasks} labeled tasks
+                  </div>
+                </div>
+              </div>
+
+              {/* Breakdown */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+                <div style={{ padding: '20px', background: '#f6ffed', borderRadius: '8px', border: '1px solid #b7eb8f' }}>
+                  <div style={{ fontSize: '14px', color: '#52c41a', fontWeight: 600, marginBottom: '8px' }}>✓ CORRECT LABELS</div>
+                  <div style={{ fontSize: '32px', fontWeight: 700, color: '#52c41a' }}>{currentEvaluation.correct_labels}</div>
+                </div>
+                <div style={{ padding: '20px', background: '#fff1f0', borderRadius: '8px', border: '1px solid #ffa39e' }}>
+                  <div style={{ fontSize: '14px', color: '#ff4d4f', fontWeight: 600, marginBottom: '8px' }}>✗ INCORRECT LABELS</div>
+                  <div style={{ fontSize: '32px', fontWeight: 700, color: '#ff4d4f' }}>{currentEvaluation.incorrect_labels}</div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Error Message */}
+          {currentEvaluation.status === 'failed' && currentEvaluation.error_message && (
+            <div style={{ padding: '16px', background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '8px', color: '#ff4d4f' }}>
+              <div style={{ fontWeight: 600, marginBottom: '8px' }}>Error:</div>
+              <div>{currentEvaluation.error_message}</div>
+            </div>
+          )}
+
+          {/* Close Button */}
+          <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
+            <Button 
+              onClick={() => setShowResults(false)}
+              style={{ padding: '10px 24px', fontSize: '14px', fontWeight: 600 }}
+            >
+              Close Results
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
