@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Button } from '@humansignal/ui';
+import React, { useState, useEffect, useContext } from 'react';
+import { Button, Spinner } from '@humansignal/ui';
 import { useUpdatePageTitle } from '@humansignal/core';
-import { IconClose } from '@humansignal/icons';
+import { ApiContext } from '../../providers/ApiProvider';
 import './EvalPage.scss';
 import type { Page } from '../types/Page';
 
@@ -14,26 +14,52 @@ const LLM_MODELS = [
   { id: "llama-2-70b", name: "Llama 2 70B", provider: "Meta" },
 ];
 
+interface Project {
+  id: number;
+  title: string;
+}
+
 export const EvalPage: Page = () => {
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [apiKey, setApiKey] = useState<string>("");
   const [systemPrompt, setSystemPrompt] = useState<string>("");
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string>("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState<boolean>(true);
+
+  const api = useContext(ApiContext);
 
   useUpdatePageTitle('Eval');
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setUploadedFiles(Array.from(e.target.files));
-    }
-  };
+  // Fetch projects on component mount
+  useEffect(() => {
+    const fetchProjects = async () => {
+      if (!api) return;
+      
+      try {
+        setLoadingProjects(true);
+        const response = await api.callApi<{ results: Project[]; count: number }>("projects", {
+          params: {
+            page_size: 1000, // Get all projects
+            include: "id,title"
+          },
+        });
+        
+        if (response?.results) {
+          setProjects(response.results);
+        }
+      } catch (error) {
+        console.error("Failed to fetch projects:", error);
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
 
-  const handleRemoveFile = (index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
-  };
+    fetchProjects();
+  }, [api]);
 
   const handleSubmit = () => {
-    if (!selectedModel || !apiKey.trim() || !systemPrompt.trim()) {
+    if (!selectedModel || !apiKey.trim() || !systemPrompt.trim() || !selectedProject) {
       alert("Please fill in all required fields");
       return;
     }
@@ -42,19 +68,19 @@ export const EvalPage: Page = () => {
       model: selectedModel,
       apiKey,
       systemPrompt,
-      files: uploadedFiles,
+      projectId: selectedProject,
     });
 
     // Reset form after submission
     setSelectedModel("");
     setApiKey("");
     setSystemPrompt("");
-    setUploadedFiles([]);
+    setSelectedProject("");
     
     alert("Evaluation created successfully!");
   };
 
-  const isFormValid = selectedModel && apiKey.trim() && systemPrompt.trim();
+  const isFormValid = selectedModel && apiKey.trim() && systemPrompt.trim() && selectedProject;
 
   return (
     <div className="eval-page" style={{ padding: '40px 48px', maxWidth: '1200px', margin: '0 auto', minHeight: '100vh', background: '#f5f5f5' }}>
@@ -180,73 +206,59 @@ export const EvalPage: Page = () => {
             </div>
           </div>
 
-          {/* Field 4: Upload Files */}
+          {/* Field 4: Select Project */}
           <div className="eval-page__field" style={{ marginBottom: '36px' }}>
             <label className="eval-page__label" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px', fontSize: '16px', fontWeight: 600, color: '#1a1a1a' }}>
               <span className="eval-page__label-number" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', background: 'linear-gradient(135deg, #1890ff 0%, #0066cc 100%)', color: 'white', borderRadius: '50%', fontSize: '14px', fontWeight: 700, flexShrink: 0, boxShadow: '0 3px 8px rgba(24, 144, 255, 0.35)' }}>4</span>
-              <span className="eval-page__label-text" style={{ flex: 1, fontSize: '16px' }}>Upload Files</span>
-              <span className="eval-page__label-optional" style={{ padding: '4px 14px', background: 'linear-gradient(135deg, #f6ffed 0%, #e8f8e0 100%)', color: '#52c41a', border: '1px solid #b7eb8f', borderRadius: '14px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', boxShadow: '0 1px 3px rgba(82, 196, 26, 0.1)' }}>Optional</span>
+              <span className="eval-page__label-text" style={{ flex: 1, fontSize: '16px' }}>Select Project</span>
+              <span className="eval-page__label-required" style={{ color: '#ff4d4f', fontSize: '20px', fontWeight: 700, marginLeft: '4px' }}>*</span>
             </label>
             
-            <div className="eval-page__upload-container" style={{ marginTop: '10px' }}>
-              <input
-                type="file"
-                id="file-upload-eval"
-                className="eval-page__file-input"
-                style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }}
-                onChange={handleFileUpload}
-                multiple
-                accept=".csv,.json,.txt"
-              />
-              <label htmlFor="file-upload-eval" className="eval-page__upload-zone" style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                padding: '44px 28px', 
-                border: '2px dashed #d0d0d0', 
-                borderRadius: '10px', 
-                background: 'linear-gradient(135deg, #fafafa 0%, #f3f3f3 100%)', 
-                cursor: 'pointer', 
-                transition: 'all 0.3s ease' 
-              }}>
-                <svg className="eval-page__upload-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#1890ff', marginBottom: '18px', transition: 'all 0.3s ease' }}>
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-                <div>
-                  <div className="eval-page__upload-title" style={{ fontSize: '16px', fontWeight: 600, color: '#262626', marginBottom: '8px' }}>Click to upload or drag and drop</div>
-                  <div className="eval-page__upload-subtitle" style={{ fontSize: '14px', color: '#8c8c8c', fontWeight: 500 }}>CSV, JSON, TXT files</div>
-                </div>
-              </label>
-            </div>
-
-            {uploadedFiles.length > 0 && (
-              <div className="eval-page__files-list" style={{ marginTop: '18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {uploadedFiles.map((file, index) => (
-                  <div key={index} className="eval-page__file-item" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 18px', background: '#fafafa', border: '1px solid #e8e8e8', borderRadius: '8px', transition: 'all 0.2s ease' }}>
-                    <svg className="eval-page__file-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, color: '#1890ff' }}>
-                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-                      <polyline points="13 2 13 9 20 9"/>
-                    </svg>
-                    <div className="eval-page__file-info" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span className="eval-page__file-name" style={{ fontSize: '14px', fontWeight: 600, color: '#262626', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
-                      <span className="eval-page__file-size" style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 500 }}>{(file.size / 1024).toFixed(2)} KB</span>
-                    </div>
-                    <button
-                      className="eval-page__file-delete"
-                      style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '34px', height: '34px', padding: 0, background: 'transparent', border: '1px solid #d9d9d9', borderRadius: '7px', color: '#8c8c8c', cursor: 'pointer', transition: 'all 0.25s ease' }}
-                      onClick={() => handleRemoveFile(index)}
-                      type="button"
-                      aria-label="Remove file"
-                    >
-                      <IconClose />
-                    </button>
-                  </div>
-                ))}
+            {loadingProjects ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 18px', border: '2px solid #d9d9d9', borderRadius: '8px', background: '#fafafa' }}>
+                <Spinner size={16} />
+                <span style={{ fontSize: '15px', color: '#8c8c8c' }}>Loading projects...</span>
               </div>
+            ) : (
+              <select
+                className="eval-page__input eval-page__select"
+                style={{ 
+                  width: '100%', 
+                  padding: '14px 18px', 
+                  paddingRight: '50px',
+                  border: '2px solid #d9d9d9', 
+                  borderRadius: '8px', 
+                  fontSize: '15px', 
+                  fontFamily: 'inherit', 
+                  color: '#262626', 
+                  background: '#fafafa',
+                  cursor: 'pointer',
+                  appearance: 'none',
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23595959' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E\")",
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 16px center',
+                  backgroundSize: '18px',
+                  boxSizing: 'border-box'
+                }}
+                value={selectedProject}
+                onChange={(e) => setSelectedProject(e.target.value)}
+              >
+                <option value="">Choose a project for evaluation</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.title}
+                  </option>
+                ))}
+              </select>
             )}
+            
+            <div className="eval-page__help-text" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginTop: '10px', padding: '12px 14px', background: '#f7f7f7', borderRadius: '6px', fontSize: '13px', color: '#595959', lineHeight: 1.6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, color: '#8c8c8c', marginTop: '2px' }}>
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+              <span>Select the project you want to evaluate. All your existing projects are listed here.</span>
+            </div>
           </div>
 
           {/* Submit Button */}
