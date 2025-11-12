@@ -32,6 +32,14 @@ def run_evaluation_async(evaluation_id: int):
         # Decrypt API key
         api_key = eval_service.decrypt_api_key(evaluation.api_key_encrypted)
         
+        # Get project label config and parse taxonomy structure
+        taxonomy_structure = None
+        if evaluation.project.label_config:
+            taxonomy_structure = eval_service.parse_taxonomy_from_config(
+                evaluation.project.label_config
+            )
+            logger.info(f"Parsed taxonomy structure: {taxonomy_structure}")
+        
         # Get project tasks
         tasks = Task.objects.filter(
             project=evaluation.project
@@ -88,7 +96,8 @@ def run_evaluation_async(evaluation_id: int):
                             'result': ann.result
                         }
                         for ann in annotations
-                    ]
+                    ],
+                    taxonomy_structure=taxonomy_structure
                 )
                 
                 # Add task ID and details
@@ -97,11 +106,18 @@ def run_evaluation_async(evaluation_id: int):
                 
                 results['task_evaluations'].append(task_result)
                 
-                # Update summary
+                # Update summary - use agreement_score for taxonomy-based evaluation
                 if task_result.get('evaluated'):
-                    if task_result.get('is_correct') is True:
+                    agreement_score = task_result.get('agreement_score', 0)
+                    # Consider > 80% agreement as "correct"
+                    if agreement_score >= 80:
                         results['summary']['correct'] += 1
-                    elif task_result.get('is_correct') is False:
+                    elif agreement_score > 0:
+                        results['summary']['incorrect'] += 1
+                    # If no human labels, don't count as incorrect
+                    elif not task_result.get('has_human_labels'):
+                        pass  # Skip counting for unlabeled tasks
+                    else:
                         results['summary']['incorrect'] += 1
                 else:
                     results['summary']['errors'] += 1

@@ -439,6 +439,34 @@ export const EvalPage: Page = () => {
                   <div style={{ fontSize: '32px', fontWeight: 700, color: '#ff4d4f' }}>{currentEvaluation.incorrect_labels}</div>
                 </div>
               </div>
+
+              {/* Download PDF Report Button */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+                <Button 
+                  onClick={() => {
+                    window.location.href = `/api/evaluations/${currentEvaluation.id}/download_report/`;
+                  }}
+                  style={{ 
+                    padding: '12px 32px', 
+                    fontSize: '15px', 
+                    fontWeight: 600,
+                    background: 'linear-gradient(135deg, #1890ff 0%, #0066cc 100%)',
+                    color: 'white',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)'
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  Download PDF Report
+                </Button>
+              </div>
             </>
           )}
 

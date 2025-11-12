@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.http import HttpResponse
 
 from evaluations.models import Evaluation
 from evaluations.serializers import (
@@ -15,6 +16,7 @@ from evaluations.serializers import (
     EvaluationCreateSerializer
 )
 from evaluations.tasks import run_evaluation_async
+from evaluations.services import EvaluationService
 from projects.models import Project
 
 logger = logging.getLogger(__name__)
@@ -64,7 +66,6 @@ class EvaluationViewSet(viewsets.ModelViewSet):
         provider = self._get_provider_from_model(llm_model)
         
         # Validate API key
-        from evaluations.services import EvaluationService
         eval_service = EvaluationService()
         
         is_valid, error_msg = eval_service.validate_api_key(provider, api_key, llm_model)
@@ -141,6 +142,54 @@ class EvaluationViewSet(viewsets.ModelViewSet):
         evaluations = self.get_queryset().filter(project_id=project_id)
         serializer = EvaluationListSerializer(evaluations, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def download_report(self, request, pk=None):
+        """Download PDF report for completed evaluation"""
+        evaluation = self.get_object()
+        
+        if evaluation.status != Evaluation.Status.COMPLETED:
+            return Response(
+                {'error': 'Evaluation not completed yet. Cannot generate report.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not evaluation.results:
+            return Response(
+                {'error': 'No results available for this evaluation'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Prepare evaluation data for PDF
+            evaluation_data = {
+                'project_title': evaluation.project.title,
+                'llm_model': evaluation.llm_model,
+                'status': evaluation.get_status_display(),
+                'total_tasks': evaluation.total_tasks or 0,
+                'labeled_tasks': evaluation.labeled_tasks or 0,
+                'accuracy_percentage': evaluation.accuracy_percentage,
+                'results': evaluation.results
+            }
+            
+            # Generate PDF
+            eval_service = EvaluationService()
+            pdf_buffer = eval_service.generate_pdf_report(evaluation_data)
+            
+            # Create response with PDF
+            response = HttpResponse(pdf_buffer.getvalue(), content_type='application/pdf')
+            filename = f"evaluation_{evaluation.id}_{evaluation.project.title.replace(' ', '_')}.pdf"
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            
+            logger.info(f"Generated PDF report for evaluation {evaluation.id}")
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error generating PDF report: {str(e)}")
+            return Response(
+                {'error': f'Failed to generate report: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def _get_provider_from_model(self, model: str) -> str:
         """Determine provider from model name"""
