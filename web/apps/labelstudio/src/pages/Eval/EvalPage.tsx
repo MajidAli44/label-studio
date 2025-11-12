@@ -413,61 +413,42 @@ export const EvalPage: Page = () => {
             </div>
           </div>
 
-          {/* Accuracy Display for Completed Evaluations */}
+          {/* Download PDF Report Button for Completed Evaluations */}
           {currentEvaluation.status === 'completed' && (
-            <>
-              <div style={{ padding: '24px', background: 'linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%)', borderRadius: '12px', marginBottom: '24px', border: '2px solid #91d5ff' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '14px', color: '#0066cc', fontWeight: 600, marginBottom: '8px' }}>ACCURACY SCORE</div>
-                  <div style={{ fontSize: '48px', fontWeight: 700, color: '#1890ff', marginBottom: '8px' }}>
-                    {currentEvaluation.accuracy_percentage?.toFixed(1) || 0}%
-                  </div>
-                  <div style={{ fontSize: '14px', color: '#595959' }}>
-                    {currentEvaluation.correct_labels} correct out of {currentEvaluation.labeled_tasks} labeled tasks
-                  </div>
-                </div>
-              </div>
-
-              {/* Breakdown */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-                <div style={{ padding: '20px', background: '#f6ffed', borderRadius: '8px', border: '1px solid #b7eb8f' }}>
-                  <div style={{ fontSize: '14px', color: '#52c41a', fontWeight: 600, marginBottom: '8px' }}>✓ CORRECT LABELS</div>
-                  <div style={{ fontSize: '32px', fontWeight: 700, color: '#52c41a' }}>{currentEvaluation.correct_labels}</div>
-                </div>
-                <div style={{ padding: '20px', background: '#fff1f0', borderRadius: '8px', border: '1px solid #ffa39e' }}>
-                  <div style={{ fontSize: '14px', color: '#ff4d4f', fontWeight: 600, marginBottom: '8px' }}>✗ INCORRECT LABELS</div>
-                  <div style={{ fontSize: '32px', fontWeight: 700, color: '#ff4d4f' }}>{currentEvaluation.incorrect_labels}</div>
-                </div>
-              </div>
-
-              {/* Download PDF Report Button */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-                <Button 
-                  onClick={() => {
-                    window.location.href = `/api/evaluations/${currentEvaluation.id}/download_report/`;
-                  }}
-                  style={{ 
-                    padding: '12px 32px', 
-                    fontSize: '15px', 
-                    fontWeight: 600,
-                    background: 'linear-gradient(135deg, #1890ff 0%, #0066cc 100%)',
-                    color: 'white',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)'
-                  }}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="7 10 12 15 17 10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
-                  </svg>
-                  Download PDF Report
-                </Button>
-              </div>
-            </>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              marginTop: '32px',
+              marginBottom: '24px',
+              paddingTop: '24px',
+              borderTop: '2px solid #e8e8e8'
+            }}>
+              <Button 
+                onClick={() => {
+                  window.location.href = `/api/evaluations/${currentEvaluation.id}/download_report/`;
+                }}
+                style={{ 
+                  padding: '14px 36px', 
+                  fontSize: '16px', 
+                  fontWeight: 600,
+                  background: 'linear-gradient(135deg, #1890ff 0%, #0066cc 100%)',
+                  color: 'white',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  boxShadow: '0 4px 16px rgba(24, 144, 255, 0.35)',
+                  transition: 'all 0.25s ease'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download Detailed PDF Report
+              </Button>
+            </div>
           )}
 
           {/* Error Message */}
