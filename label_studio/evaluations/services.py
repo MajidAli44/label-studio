@@ -207,16 +207,21 @@ class EvaluationService:
             )
             
             # Extract LLM's label from response
-            llm_label = self._extract_label_from_response(llm_response)
+            llm_evaluation = self._extract_label_from_response(llm_response, existing_label)
             
-            # Compare labels
-            is_correct = self._compare_labels(existing_label, llm_label) if existing_label else None
+            # Determine if correct
+            is_correct = None
+            if existing_label:
+                if llm_evaluation.get('type') == 'taxonomy':
+                    is_correct = llm_evaluation.get('overall_correct')
+                else:
+                    is_correct = llm_evaluation.get('is_correct')
             
             return {
                 'evaluated': True,
                 'task_text': task_text,
                 'existing_label': existing_label,
-                'llm_label': llm_label,
+                'llm_evaluation': llm_evaluation,
                 'llm_full_response': llm_response,
                 'is_correct': is_correct,
                 'has_existing_label': existing_label is not None
@@ -249,8 +254,8 @@ class EvaluationService:
         
         return None
     
-    def _extract_label_from_annotations(self, annotations: List[Dict]) -> Optional[str]:
-        """Extract label from task annotations"""
+    def _extract_label_from_annotations(self, annotations: List[Dict]) -> Optional[Dict]:
+        """Extract label from task annotations - returns structured data for taxonomy"""
         if not annotations:
             return None
         
@@ -265,16 +270,54 @@ class EvaluationService:
                 for item in result:
                     if 'value' in item:
                         value = item['value']
-                        # Handle different label formats
-                        if isinstance(value, dict):
+                        label_type = item.get('type', 'unknown')
+                        
+                        # Handle taxonomy labels specifically
+                        if label_type == 'taxonomy' and 'taxonomy' in value:
+                            taxonomy_labels = value['taxonomy']
+                            # Format: [["Priority", "High"], ["Others", "Prices"]]
+                            formatted = []
+                            for tax in taxonomy_labels:
+                                if isinstance(tax, list) and len(tax) >= 2:
+                                    formatted.append(f"{tax[0]}: {tax[1]}")
+                            return {
+                                'type': 'taxonomy',
+                                'labels': formatted,
+                                'raw': taxonomy_labels
+                            }
+                        
+                        # Handle other label formats
+                        elif isinstance(value, dict):
                             if 'choices' in value:
-                                return ', '.join(value['choices'])
+                                return {
+                                    'type': 'choices',
+                                    'labels': value['choices'],
+                                    'raw': value['choices']
+                                }
                             elif 'labels' in value:
-                                return ', '.join(value['labels'])
+                                return {
+                                    'type': 'labels',
+                                    'labels': value['labels'],
+                                    'raw': value['labels']
+                                }
                             elif 'text' in value:
-                                return value['text']
-                        elif isinstance(value, (str, list)):
-                            return str(value)
+                                return {
+                                    'type': 'text',
+                                    'labels': [value['text']],
+                                    'raw': value['text']
+                                }
+                        elif isinstance(value, list):
+                            return {
+                                'type': 'list',
+                                'labels': value,
+                                'raw': value
+                            }
+                        elif isinstance(value, str):
+                            return {
+                                'type': 'string',
+                                'labels': [value],
+                                'raw': value
+                            }
         
         return None
     
@@ -282,28 +325,56 @@ class EvaluationService:
         self, 
         system_prompt: str, 
         task_text: str, 
-        existing_label: Optional[str]
+        existing_label: Optional[Dict]
     ) -> str:
         """Create evaluation prompt for LLM"""
         if existing_label:
-            return f"""{system_prompt}
+            label_type = existing_label.get('type', 'unknown')
+            labels = existing_label.get('labels', [])
+            
+            if label_type == 'taxonomy':
+                # Special handling for taxonomy labels
+                labels_text = '\n'.join([f"  - {label}" for label in labels])
+                return f"""{system_prompt}
 
-Task Text: {task_text}
+Text to analyze:
+"{task_text}"
 
-Existing Label: {existing_label}
+Existing Labels (Taxonomy):
+{labels_text}
 
-Please evaluate if the existing label is correct for this task. Respond with:
-1. Your evaluation of the label (correct/incorrect)
-2. What you think the correct label should be
-3. Brief explanation of your reasoning"""
+Task: Evaluate EACH label individually and determine if it correctly classifies the text.
+For each label, analyze:
+1. Is this category/classification appropriate for the text?
+2. Does the text content support this label?
+
+Respond in this format:
+Label 1 [{labels[0] if labels else ''}]: CORRECT or INCORRECT - brief reason
+Label 2 [{labels[1] if len(labels) > 1 else ''}]: CORRECT or INCORRECT - brief reason
+(continue for each label)
+
+Overall Assessment: State if all labels are correct or which ones need changes."""
+            else:
+                # Other label types
+                labels_text = ', '.join(labels)
+                return f"""{system_prompt}
+
+Text: "{task_text}"
+
+Existing Label(s): {labels_text}
+
+Evaluate if this label correctly classifies the text. Respond with:
+1. CORRECT or INCORRECT
+2. Brief explanation
+3. If incorrect, suggest the correct label"""
         else:
             return f"""{system_prompt}
 
-Task Text: {task_text}
+Text: "{task_text}"
 
-This task has no existing label. Please provide:
-1. What label you would assign to this task
-2. Brief explanation of your reasoning"""
+This text has no existing label. Please:
+1. Suggest appropriate label(s)
+2. Explain your reasoning"""
     
     def _call_llm_api(
         self, 
@@ -383,29 +454,90 @@ This task has no existing label. Please provide:
         data = response.json()
         return data['candidates'][0]['content']['parts'][0]['text']
     
-    def _extract_label_from_response(self, response: str) -> Optional[str]:
-        """Extract label from LLM response"""
-        # Try to extract structured label
-        # Look for patterns like "Label: X" or "Correct label: X"
-        patterns = [
-            r'(?:correct label|should be|label):\s*["\']?([^"\'\n]+)["\']?',
-            r'I would label this as[:\s]+["\']?([^"\'\n]+)["\']?',
-            r'The label should be[:\s]+["\']?([^"\'\n]+)["\']?'
-        ]
+    def _extract_label_from_response(self, response: str, existing_label: Optional[Dict] = None) -> Dict:
+        """Extract label evaluation from LLM response"""
+        response_lower = response.lower()
         
-        for pattern in patterns:
-            match = re.search(pattern, response, re.IGNORECASE)
-            if match:
-                return match.group(1).strip()
+        # For taxonomy labels, parse individual label evaluations
+        if existing_label and existing_label.get('type') == 'taxonomy':
+            labels = existing_label.get('labels', [])
+            evaluations = []
+            
+            for i, label in enumerate(labels, 1):
+                # Look for patterns like "Label 1: CORRECT" or "Priority: High - CORRECT"
+                patterns = [
+                    rf'label\s*{i}[:\s]+.*?(correct|incorrect)',
+                    rf'{re.escape(label)}[:\s]+.*?(correct|incorrect)',
+                ]
+                
+                found = False
+                for pattern in patterns:
+                    match = re.search(pattern, response_lower)
+                    if match:
+                        is_correct = match.group(1) == 'correct'
+                        evaluations.append({
+                            'label': label,
+                            'is_correct': is_correct
+                        })
+                        found = True
+                        break
+                
+                if not found:
+                    # Default: check if the label appears near "correct" or "incorrect"
+                    label_lower = label.lower()
+                    context_before = 50
+                    context_after = 50
+                    
+                    if label_lower in response_lower:
+                        idx = response_lower.find(label_lower)
+                        context = response_lower[max(0, idx-context_before):idx+len(label_lower)+context_after]
+                        
+                        if 'correct' in context:
+                            if 'incorrect' in context:
+                                # If both, check which is closer
+                                correct_dist = abs(context.find('correct') - len(label_lower))
+                                incorrect_dist = abs(context.find('incorrect') - len(label_lower))
+                                is_correct = correct_dist < incorrect_dist
+                            else:
+                                is_correct = True
+                        elif 'incorrect' in context:
+                            is_correct = False
+                        else:
+                            is_correct = None
+                        
+                        evaluations.append({
+                            'label': label,
+                            'is_correct': is_correct
+                        })
+            
+            # Determine overall correctness
+            if all(e.get('is_correct') == True for e in evaluations if e.get('is_correct') is not None):
+                overall_correct = True
+            elif any(e.get('is_correct') == False for e in evaluations):
+                overall_correct = False
+            else:
+                overall_correct = None
+            
+            return {
+                'type': 'taxonomy',
+                'evaluations': evaluations,
+                'overall_correct': overall_correct,
+                'full_response': response
+            }
         
-        # Fallback: return first line or first 100 chars
-        lines = response.split('\n')
-        for line in lines:
-            line = line.strip()
-            if line and len(line) < 100:
-                return line
-        
-        return response[:100].strip()
+        # For other label types, simpler evaluation
+        else:
+            is_correct = None
+            if 'correct' in response_lower and 'incorrect' not in response_lower:
+                is_correct = True
+            elif 'incorrect' in response_lower:
+                is_correct = False
+            
+            return {
+                'type': 'simple',
+                'is_correct': is_correct,
+                'full_response': response
+            }
     
     def _compare_labels(self, label1: Optional[str], label2: Optional[str]) -> bool:
         """Compare two labels for similarity"""
