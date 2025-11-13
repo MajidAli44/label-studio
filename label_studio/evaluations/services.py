@@ -1016,17 +1016,17 @@ This text has no existing label. Please:
             support = human_applied + llm_applied
             jaccard = tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 0.0
             
-            # Color bucket - keep grey for low support but still show in report
+            # Color bucket based on performance metrics only (no support threshold)
             if support == 0:
                 color_bucket = "grey"  # No activity at all
-            elif support < 3:
-                color_bucket = "grey"  # Low activity - metrics less reliable
+            elif f1_score < 0.50 and jaccard < 0.40:
+                color_bucket = "red"  # Priority fix needed
+            elif (0.50 <= f1_score < 0.80) or (0.40 <= jaccard < 0.70):
+                color_bucket = "yellow"  # Needs improvement
             elif f1_score >= 0.80 or jaccard >= 0.70:
-                color_bucket = "green"
-            elif f1_score >= 0.50 or jaccard >= 0.40:
-                color_bucket = "yellow"
+                color_bucket = "green"  # Good performance
             else:
-                color_bucket = "red"
+                color_bucket = "grey"  # Edge cases with low/unclear performance
             
             label_summary_data.append({
                 'label_name': label_name,
@@ -1111,10 +1111,10 @@ This text has no existing label. Please:
         
         # Priority Guide (text format, not table)
         story.append(Paragraph("<b>Priority Guide (Absolute Performance Thresholds):</b>", styles['Normal']))
-        story.append(Paragraph("<b>Red Rows:</b> Priority fix needed - F1 < 0.50 AND Jaccard < 0.40 (with support >= 3)", normal_small))
-        story.append(Paragraph("<b>Yellow Rows:</b> Needs improvement - 0.50 <= F1 < 0.80 OR 0.40 <= Jaccard < 0.70 (with support >= 3)", normal_small))
-        story.append(Paragraph("<b>Green Rows:</b> Good performance - F1 >= 0.80 OR Jaccard >= 0.70 (with support >= 3)", normal_small))
-        story.append(Paragraph("<b>Grey Rows:</b> Insufficient data - Support < 3 (not enough evidence to measure performance reliably)", normal_small))
+        story.append(Paragraph("<b>Red Rows:</b> Priority fix needed - F1 < 0.50 AND Jaccard < 0.40", normal_small))
+        story.append(Paragraph("<b>Yellow Rows:</b> Needs improvement - 0.50 <= F1 < 0.80 OR 0.40 <= Jaccard < 0.70", normal_small))
+        story.append(Paragraph("<b>Green Rows:</b> Good performance - F1 >= 0.80 OR Jaccard >= 0.70", normal_small))
+        story.append(Paragraph("<b>Grey Rows:</b> No activity - Support = 0 (no assignments made)", normal_small))
         story.append(Spacer(1, 0.5*inch))
         
         # === DETAILED LABEL-WISE ANALYSIS ===
