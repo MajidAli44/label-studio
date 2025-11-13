@@ -84,3 +84,9 @@ docker-compose.override.yml
 CLAUDE.local.md
 web/libs/editor/tests/coverage
 .cache
+
+# Azure deployment sensitive files
+app-settings.json
+deployment-info.txt
+*.ps1
+DEPLOYMENT.md

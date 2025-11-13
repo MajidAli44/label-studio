@@ -1055,9 +1055,11 @@ This text has no existing label. Please:
         ]
         
         for rank, data in enumerate(sorted_labels, 1):
+            # Use Paragraph for label cell to enable text wrapping
+            label_paragraph = Paragraph(data['label_name'], normal_small)
             summary_table_data.append([
                 str(rank),
-                data['label_name'][:40] + ('...' if len(data['label_name']) > 40 else ''),
+                label_paragraph,
                 str(data['support']),
                 f"{data['jaccard']:.2f}",
                 f"{data['f1_score']:.2f}",
@@ -1068,7 +1070,7 @@ This text has no existing label. Please:
         
         perf_table = Table(
             summary_table_data,
-            colWidths=[0.4*inch, 2.3*inch, 0.65*inch, 0.65*inch, 0.7*inch, 0.6*inch, 0.6*inch, 0.7*inch]
+            colWidths=[0.4*inch, 2.5*inch, 0.65*inch, 0.65*inch, 0.7*inch, 0.55*inch, 0.55*inch, 0.7*inch]
         )
         
         # Base styling
@@ -1193,7 +1195,8 @@ This text has no existing label. Please:
             if correctly_selected_count > 0:
                 story.append(Paragraph(f"<font color='green'>✓ Correctly Selected ({correctly_selected_count}):</font>", normal_small))
                 for idx, (quote_id, reasoning) in enumerate(perf['correctly_selected'], 1):
-                    analysis_text = f"<b>• QUO{quote_id}:</b> According to the rule definition: {reasoning[:200] + ('...' if len(reasoning) > 200 else '')}"
+                    # Use full reasoning without truncation
+                    analysis_text = f"<b>• QUO{quote_id}:</b> According to the rule definition: {reasoning}"
                     story.append(Paragraph(analysis_text, normal_small))
                     if idx < correctly_selected_count:
                         story.append(Spacer(1, 0.05*inch))
@@ -1207,7 +1210,8 @@ This text has no existing label. Please:
             if incorrectly_selected_count > 0:
                 story.append(Paragraph(f"<font color='red'>✗ Incorrectly Selected ({incorrectly_selected_count}):</font>", normal_small))
                 for idx, (quote_id, reasoning) in enumerate(perf['incorrectly_selected'], 1):
-                    analysis_text = f"<b>• QUO{quote_id}:</b> {reasoning[:200] + ('...' if len(reasoning) > 200 else '')}"
+                    # Use full reasoning without truncation
+                    analysis_text = f"<b>• QUO{quote_id}:</b> {reasoning}"
                     story.append(Paragraph(analysis_text, normal_small))
                     if idx < incorrectly_selected_count:
                         story.append(Spacer(1, 0.05*inch))

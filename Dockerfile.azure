@@ -1,0 +1,48 @@
+# Azure-optimized Dockerfile for Label Studio with Evaluations
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /label-studio
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    libxml2-dev \
+    libxslt1-dev \
+    zlib1g-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy application files
+COPY . /label-studio/
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e . && \
+    pip install --no-cache-dir reportlab>=4.0.0 gunicorn>=21.2.0 psycopg[binary]>=3.2.0 cryptography>=44.0.1
+
+# Create data directory
+RUN mkdir -p /label-studio/data
+
+# Set environment variables
+ENV PYTHONPATH=/label-studio
+ENV DJANGO_SETTINGS_MODULE=core.settings.label_studio
+ENV LABEL_STUDIO_BASE_DATA_DIR=/label-studio/data
+ENV PORT=8080
+
+# Expose port
+EXPOSE 8080
+
+# Run database migrations and start server
+CMD cd /label-studio && \
+    python label_studio/manage.py migrate && \
+    python label_studio/manage.py collectstatic --noinput && \
+    gunicorn --bind 0.0.0.0:8080 \
+    --workers 2 \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile - \
+    --chdir /label-studio/label_studio \
+    core.wsgi:application
