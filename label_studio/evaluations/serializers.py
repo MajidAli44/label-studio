@@ -3,6 +3,7 @@
 from rest_framework import serializers
 from evaluations.models import Evaluation
 from projects.models import Project
+from django.conf import settings
 
 
 class EvaluationCreateSerializer(serializers.Serializer):
@@ -11,7 +12,8 @@ class EvaluationCreateSerializer(serializers.Serializer):
     project_id = serializers.IntegerField(required=True)
     llm_model = serializers.CharField(required=True, max_length=128)
     system_prompt = serializers.CharField(required=True)
-    api_key = serializers.CharField(required=True, write_only=True)
+    api_key = serializers.CharField(required=False, write_only=True, allow_blank=True)
+    use_default_api_key = serializers.BooleanField(required=False, default=False)
     
     def validate_project_id(self, value):
         """Validate project exists and user has access"""
@@ -25,10 +27,7 @@ class EvaluationCreateSerializer(serializers.Serializer):
     def validate_llm_model(self, value):
         """Validate model format"""
         valid_models = [
-            'gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo',
-            'claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku',
-            'gemini-pro', 'gemini-pro-vision',
-            'llama-2-70b'
+            'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'
         ]
         
         if value not in valid_models:
@@ -36,11 +35,24 @@ class EvaluationCreateSerializer(serializers.Serializer):
         
         return value
     
-    def validate_api_key(self, value):
-        """Validate API key format"""
-        if not value or len(value) < 10:
-            raise serializers.ValidationError("Invalid API key format")
-        return value
+    def validate(self, data):
+        """Validate that either api_key is provided or use_default_api_key is True"""
+        use_default = data.get('use_default_api_key', False)
+        api_key = data.get('api_key', '')
+        
+        if use_default:
+            # Use the default API key from settings
+            if not settings.OPENAI_API_KEY:
+                raise serializers.ValidationError({
+                    "api_key": "Default API key is not configured in server settings"
+                })
+            data['api_key'] = settings.OPENAI_API_KEY
+        elif not api_key or len(api_key) < 10:
+            raise serializers.ValidationError({
+                "api_key": "API key is required when not using default"
+            })
+        
+        return data
 
 
 class EvaluationSerializer(serializers.ModelSerializer):

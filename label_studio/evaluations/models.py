@@ -34,7 +34,7 @@ class Evaluation(models.Model):
     
     llm_model = models.CharField(
         max_length=128,
-        help_text='LLM model identifier (e.g., gpt-4, claude-3-opus)'
+        help_text='LLM model identifier (e.g., gpt-4, gpt-4o, gpt-4o-mini)'
     )
     
     model_provider = models.CharField(

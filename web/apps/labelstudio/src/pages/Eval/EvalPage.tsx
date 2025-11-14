@@ -7,11 +7,10 @@ import type { Page } from '../types/Page';
 
 const LLM_MODELS = [
   { id: "gpt-4", name: "GPT-4", provider: "OpenAI" },
+  { id: "gpt-4-turbo", name: "GPT-4 Turbo", provider: "OpenAI" },
+  { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI" },
+  { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI" },
   { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo", provider: "OpenAI" },
-  { id: "claude-3-opus", name: "Claude 3 Opus", provider: "Anthropic" },
-  { id: "claude-3-sonnet", name: "Claude 3 Sonnet", provider: "Anthropic" },
-  { id: "gemini-pro", name: "Gemini Pro", provider: "Google" },
-  { id: "llama-2-70b", name: "Llama 2 70B", provider: "Meta" },
 ];
 
 interface Project {
@@ -34,7 +33,7 @@ interface Evaluation {
   results?: any;
 }
 
-export const EvalPage: Page = () => {
+export const EvalPage = () => {
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [apiKey, setApiKey] = useState<string>("");
   const [systemPrompt, setSystemPrompt] = useState<string>("");
@@ -44,10 +43,13 @@ export const EvalPage: Page = () => {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [currentEvaluation, setCurrentEvaluation] = useState<Evaluation | null>(null);
   const [showResults, setShowResults] = useState<boolean>(false);
+  const [useDefaultKey, setUseDefaultKey] = useState<boolean>(true);
 
   const api = useContext(ApiContext);
 
-  useUpdatePageTitle('Eval');
+  useUpdatePageTitle('Evaluation');
+
+  const MASKED_API_KEY = "sk-proj-...";
 
   // Fetch projects on component mount
   useEffect(() => {
@@ -77,7 +79,7 @@ export const EvalPage: Page = () => {
   }, [api]);
 
   const handleSubmit = async () => {
-    if (!selectedModel || !apiKey.trim() || !systemPrompt.trim() || !selectedProject) {
+    if (!selectedModel || !systemPrompt.trim() || !selectedProject) {
       alert("Please fill in all required fields");
       return;
     }
@@ -101,7 +103,7 @@ export const EvalPage: Page = () => {
           project_id: parseInt(selectedProject),
           llm_model: selectedModel,
           system_prompt: systemPrompt,
-          api_key: apiKey,
+          use_default_api_key: useDefaultKey,  // Signal to use server-side default key
         }),
       });
 
@@ -117,7 +119,6 @@ export const EvalPage: Page = () => {
       
       // Reset form
       setSelectedModel("");
-      setApiKey("");
       setSystemPrompt("");
       setSelectedProject("");
       
@@ -166,7 +167,8 @@ export const EvalPage: Page = () => {
     }, 5000); // Poll every 5 seconds
   };
 
-  const isFormValid = selectedModel && apiKey.trim() && systemPrompt.trim() && selectedProject;
+  // Form is valid if we have model, prompt, project, and either using default key or have custom key
+  const isFormValid = selectedModel && systemPrompt.trim() && selectedProject && (useDefaultKey || apiKey.trim());
 
   return (
     <div className="eval-page" style={{ padding: '40px 48px', maxWidth: '1200px', margin: '0 auto', minHeight: '100vh', background: '#f5f5f5' }}>
@@ -221,11 +223,10 @@ export const EvalPage: Page = () => {
           <div className="eval-page__field" style={{ marginBottom: '36px' }}>
             <label className="eval-page__label" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px', fontSize: '16px', fontWeight: 600, color: '#1a1a1a' }}>
               <span className="eval-page__label-number" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', background: 'linear-gradient(135deg, #1890ff 0%, #0066cc 100%)', color: 'white', borderRadius: '50%', fontSize: '14px', fontWeight: 700, flexShrink: 0, boxShadow: '0 3px 8px rgba(24, 144, 255, 0.35)' }}>2</span>
-              <span className="eval-page__label-text" style={{ flex: 1, fontSize: '16px' }}>Enter API Key</span>
-              <span className="eval-page__label-required" style={{ color: '#ff4d4f', fontSize: '20px', fontWeight: 700, marginLeft: '4px' }}>*</span>
+              <span className="eval-page__label-text" style={{ flex: 1, fontSize: '16px' }}>API Key</span>
             </label>
             <input
-              type="password"
+              type="text"
               className="eval-page__input"
               style={{
                 width: '100%',
@@ -233,23 +234,22 @@ export const EvalPage: Page = () => {
                 border: '2px solid #d9d9d9',
                 borderRadius: '8px',
                 fontSize: '15px',
-                fontFamily: 'inherit',
-                color: '#262626',
-                background: '#ffffff',
+                fontFamily: 'monospace',
+                color: '#8c8c8c',
+                background: '#fafafa',
                 transition: 'all 0.25s ease',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                cursor: 'not-allowed'
               }}
-              placeholder="sk-..."
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              autoComplete="off"
+              value={MASKED_API_KEY}
+              readOnly
+              disabled
             />
-            <div className="eval-page__help-text" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginTop: '10px', padding: '12px 14px', background: '#f7f7f7', borderRadius: '6px', fontSize: '13px', color: '#595959', lineHeight: 1.6 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, color: '#8c8c8c', marginTop: '2px' }}>
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            <div className="eval-page__help-text" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginTop: '10px', padding: '12px 14px', background: '#f0f7ff', borderRadius: '6px', fontSize: '13px', color: '#595959', lineHeight: 1.6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, color: '#1890ff', marginTop: '2px' }}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
-              <span>Your API key will be encrypted and stored securely</span>
+              <span>Default API key is pre-configured and secured</span>
             </div>
           </div>
 
@@ -404,11 +404,11 @@ export const EvalPage: Page = () => {
               <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a1a' }}>{currentEvaluation.llm_model}</div>
             </div>
             <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
-              <div style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 600, marginBottom: '8px' }}>TOTAL TASKS</div>
+              <div style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 600, marginBottom: '8px' }}>TOTAL QUOTES</div>
               <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a1a' }}>{currentEvaluation.total_tasks}</div>
             </div>
             <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
-              <div style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 600, marginBottom: '8px' }}>LABELED TASKS</div>
+              <div style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 600, marginBottom: '8px' }}>LABELED QUOTES</div>
               <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a1a' }}>{currentEvaluation.labeled_tasks}</div>
             </div>
           </div>
@@ -474,6 +474,6 @@ export const EvalPage: Page = () => {
   );
 };
 
-EvalPage.title = 'Eval';
-EvalPage.path = '/eval';
+EvalPage.title = 'Evaluation';
+EvalPage.path = '/evaluation';
 EvalPage.exact = true;

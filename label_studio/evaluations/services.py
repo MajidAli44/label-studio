@@ -32,7 +32,7 @@ class EvaluationService:
     PROVIDER_CONFIGS = {
         'openai': {
             'api_url': 'https://api.openai.com/v1/chat/completions',
-            'models': ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo'],
+            'models': ['gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
             'headers': lambda key: {
                 'Authorization': f'Bearer {key}',
                 'Content-Type': 'application/json'
@@ -1336,7 +1336,7 @@ This text has no existing label. Please:
         story.append(PageBreak())
         story.append(Paragraph("Report Summary", heading_style))
         story.append(Paragraph(f"<b>Total Labels Analyzed:</b> {labels_analyzed}", styles['Normal']))
-        story.append(Paragraph(f"<b>Total Tasks Evaluated:</b> {len(valid_evals)}", styles['Normal']))
+        story.append(Paragraph(f"<b>Total Quotes Evaluated:</b> {len(valid_evals)}", styles['Normal']))
         story.append(Paragraph(f"<i>All labels are included in this report, regardless of how many times they were assigned.</i>", styles['Normal']))
         
         # Build PDF

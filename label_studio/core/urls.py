@@ -33,7 +33,7 @@ from drf_spectacular.views import (
 
 urlpatterns = [
     re_path(r'^$', views.main, name='main'),
-    re_path(r'^eval/?$', views.main, name='eval'),  # Eval page route
+    re_path(r'^evaluation/?$', views.main, name='evaluation'),  # Evaluation page route
     re_path(r'^sw\.js$', views.static_file_with_host_resolver('js/sw.js', content_type='text/javascript')),
     re_path(
         r'^sw-fallback\.js$',
