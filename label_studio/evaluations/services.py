@@ -80,6 +80,7 @@ class EvaluationService:
     def parse_taxonomy_from_config(self, label_config: str) -> Dict[str, List[Dict]]:
         """
         Parse taxonomy structure from Label Studio XML config
+        Combines parent and child hints for better LLM guidance
         Returns: Dict with taxonomy categories and their choices
         """
         try:
@@ -91,23 +92,31 @@ class EvaluationService:
                 taxonomy_name = taxonomy.get('name', 'taxonomy')
                 choices_data = []
                 
-                # Parse nested Choice elements
-                def parse_choice(choice_elem, parent_path=[]):
+                # Parse nested Choice elements, collecting hints from parent hierarchy
+                def parse_choice(choice_elem, parent_path=[], parent_hints=[]):
                     choice_value = choice_elem.get('value', '')
                     choice_hint = choice_elem.get('hint', '')
                     current_path = parent_path + [choice_value]
+                    
+                    # Collect all hints in the hierarchy (parent + current)
+                    current_hints = parent_hints.copy()
+                    if choice_hint:
+                        current_hints.append(choice_hint)
                     
                     # Check if this choice has nested choices
                     nested_choices = choice_elem.findall('./Choice')
                     
                     if nested_choices:
-                        # This is a parent category
+                        # This is a parent category - pass hints down to children
                         for nested in nested_choices:
-                            parse_choice(nested, current_path)
+                            parse_choice(nested, current_path, current_hints)
                     else:
+                        # Leaf node - combine all hints from parent hierarchy + this hint
+                        combined_hint = ' + '.join(filter(None, current_hints)) if current_hints else ''
+                        
                         choices_data.append({
                             'path': current_path,
-                            'hint': choice_hint,
+                            'hint': combined_hint,
                             'category': parent_path[0] if parent_path else choice_value,
                             'value': choice_value
                         })
