@@ -29,6 +29,7 @@ interface Evaluation {
   total_tasks: number;
   correct_labels: number;
   incorrect_labels: number;
+  only_labeled_tasks: boolean;
   error_message?: string;
   results?: any;
 }
@@ -44,6 +45,7 @@ export const EvalPage = () => {
   const [currentEvaluation, setCurrentEvaluation] = useState<Evaluation | null>(null);
   const [showResults, setShowResults] = useState<boolean>(false);
   const [useDefaultKey, setUseDefaultKey] = useState<boolean>(true);
+  const [onlyLabeledTasks, setOnlyLabeledTasks] = useState<boolean>(true);
 
   const api = useContext(ApiContext);
 
@@ -104,6 +106,7 @@ export const EvalPage = () => {
           llm_model: selectedModel,
           system_prompt: systemPrompt,
           use_default_api_key: useDefaultKey,  // Signal to use server-side default key
+          only_labeled_tasks: onlyLabeledTasks,  // Control whether to evaluate all tasks or only labeled ones
         }),
       });
 
@@ -347,6 +350,43 @@ export const EvalPage = () => {
             </div>
           </div>
 
+          {/* Field 5: Only Evaluate Labeled Quotes Checkbox */}
+          <div className="eval-page__field" style={{ marginBottom: '36px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={onlyLabeledTasks}
+                onChange={(e) => setOnlyLabeledTasks(e.target.checked)}
+                style={{ 
+                  width: '20px', 
+                  height: '20px', 
+                  cursor: 'pointer',
+                  accentColor: '#1890ff'
+                }}
+              />
+              <span style={{ fontSize: '15px', color: '#262626', fontWeight: 500 }}>
+                Only evaluate quotes with human labels
+              </span>
+            </label>
+            <div className="eval-page__help-text" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginTop: '10px', marginLeft: '32px', padding: '12px 14px', background: onlyLabeledTasks ? '#e6f7ff' : '#fff7e6', border: `1px solid ${onlyLabeledTasks ? '#91d5ff' : '#ffd591'}`, borderRadius: '6px', fontSize: '13px', color: '#595959', lineHeight: 1.6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, color: onlyLabeledTasks ? '#1890ff' : '#fa8c16', marginTop: '2px' }}>
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 16v-4M12 8h.01"/>
+              </svg>
+              <span>
+                {onlyLabeledTasks ? (
+                  <>
+                    <strong>Checked (default):</strong> Only quotes with human labels will be evaluated. LLM predictions will be compared against human ground truth.
+                  </>
+                ) : (
+                  <>
+                    <strong>Unchecked:</strong> All quotes will be evaluated. For labeled quotes, LLM predictions are compared with human labels. For unlabeled quotes, LLM generates labels with reasoning (no comparison).
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+
           {/* Submit Button */}
           <div className="eval-page__actions" style={{ marginTop: '48px', paddingTop: '36px', borderTop: '2px solid #e8e8e8', display: 'flex', justifyContent: 'center' }}>
             <Button 
@@ -411,6 +451,13 @@ export const EvalPage = () => {
               <div style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 600, marginBottom: '8px' }}>LABELED QUOTES</div>
               <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a1a' }}>{currentEvaluation.labeled_tasks}</div>
             </div>
+            {!currentEvaluation.only_labeled_tasks && currentEvaluation.results?.summary?.llm_only_labels > 0 && (
+              <div style={{ padding: '16px', background: '#e6f7ff', borderRadius: '8px', border: '1px solid #91d5ff' }}>
+                <div style={{ fontSize: '12px', color: '#0050b3', fontWeight: 600, marginBottom: '8px' }}>LLM-ONLY LABELS</div>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#0050b3' }}>{currentEvaluation.results.summary.llm_only_labels}</div>
+                <div style={{ fontSize: '11px', color: '#1890ff', marginTop: '4px' }}>No human labels</div>
+              </div>
+            )}
           </div>
 
           {/* Download PDF Report Button for Completed Evaluations */}

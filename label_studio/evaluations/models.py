@@ -51,6 +51,11 @@ class Evaluation(models.Model):
         help_text='Encrypted API key for the LLM provider'
     )
     
+    only_labeled_tasks = models.BooleanField(
+        default=True,
+        help_text='If True, only evaluate tasks with human labels. If False, evaluate all tasks.'
+    )
+    
     # Status and tracking
     status = models.CharField(
         max_length=16,

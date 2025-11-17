@@ -51,7 +51,7 @@ def run_evaluation_async(evaluation_id: int):
             evaluation.mark_as_failed("Project has no tasks to evaluate")
             return
         
-        # Check if any tasks have labels
+        # Separate labeled and unlabeled tasks
         labeled_tasks = []
         unlabeled_tasks = []
         
@@ -64,24 +64,33 @@ def run_evaluation_async(evaluation_id: int):
         
         labeled_count = len(labeled_tasks)
         
-        if labeled_count == 0:
-            evaluation.mark_as_failed("Project has no labeled tasks to evaluate")
-            return
+        # If only_labeled_tasks is True, check if we have labeled tasks
+        if evaluation.only_labeled_tasks:
+            if labeled_count == 0:
+                evaluation.mark_as_failed("Project has no labeled tasks to evaluate")
+                return
+            # Only evaluate labeled tasks
+            tasks_to_evaluate = labeled_tasks
+        else:
+            # Evaluate all tasks (both labeled and unlabeled)
+            tasks_to_evaluate = labeled_tasks + [(task, []) for task in unlabeled_tasks]
         
-        # Evaluate each labeled task
+        # Evaluate tasks based on configuration
         results = {
             'task_evaluations': [],
             'summary': {
                 'total_tasks': total_tasks,
                 'labeled_tasks': labeled_count,
                 'unlabeled_tasks': len(unlabeled_tasks),
+                'evaluated_tasks': len(tasks_to_evaluate),
                 'correct': 0,
                 'incorrect': 0,
+                'llm_only_labels': 0,
                 'errors': 0
             }
         }
         
-        for task, annotations in labeled_tasks:
+        for task, annotations in tasks_to_evaluate:
             try:
                 task_result = eval_service.evaluate_task(
                     provider=evaluation.model_provider,
@@ -108,17 +117,21 @@ def run_evaluation_async(evaluation_id: int):
                 
                 # Update summary - use agreement_score for taxonomy-based evaluation
                 if task_result.get('evaluated'):
-                    agreement_score = task_result.get('agreement_score', 0)
-                    # Consider > 80% agreement as "correct"
-                    if agreement_score >= 80:
-                        results['summary']['correct'] += 1
-                    elif agreement_score > 0:
-                        results['summary']['incorrect'] += 1
-                    # If no human labels, don't count as incorrect
-                    elif not task_result.get('has_human_labels'):
-                        pass  # Skip counting for unlabeled tasks
+                    has_human_labels = task_result.get('has_human_labels', False)
+                    
+                    if has_human_labels:
+                        # Task has human labels - compare LLM vs human
+                        agreement_score = task_result.get('agreement_score', 0)
+                        # Consider > 80% agreement as "correct"
+                        if agreement_score >= 80:
+                            results['summary']['correct'] += 1
+                        elif agreement_score > 0:
+                            results['summary']['incorrect'] += 1
+                        else:
+                            results['summary']['incorrect'] += 1
                     else:
-                        results['summary']['incorrect'] += 1
+                        # Task has no human labels - LLM generated labels only
+                        results['summary']['llm_only_labels'] += 1
                 else:
                     results['summary']['errors'] += 1
                     

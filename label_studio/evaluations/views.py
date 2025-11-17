@@ -55,6 +55,7 @@ class EvaluationViewSet(viewsets.ModelViewSet):
         llm_model = data['llm_model']
         system_prompt = data['system_prompt']
         api_key = data['api_key']
+        only_labeled_tasks = data.get('only_labeled_tasks', True)
         
         # Get project
         project = get_object_or_404(
@@ -85,6 +86,7 @@ class EvaluationViewSet(viewsets.ModelViewSet):
             model_provider=provider,
             system_prompt=system_prompt,
             api_key_encrypted=encrypted_key,
+            only_labeled_tasks=only_labeled_tasks,
             status=Evaluation.Status.PENDING,
             created_by=request.user
         )

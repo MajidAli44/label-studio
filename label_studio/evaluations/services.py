@@ -105,7 +105,6 @@ class EvaluationService:
                         for nested in nested_choices:
                             parse_choice(nested, current_path)
                     else:
-                        # This is a leaf node - add the complete path
                         choices_data.append({
                             'path': current_path,
                             'hint': choice_hint,

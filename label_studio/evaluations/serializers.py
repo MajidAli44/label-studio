@@ -14,6 +14,7 @@ class EvaluationCreateSerializer(serializers.Serializer):
     system_prompt = serializers.CharField(required=True)
     api_key = serializers.CharField(required=False, write_only=True, allow_blank=True)
     use_default_api_key = serializers.BooleanField(required=False, default=False)
+    only_labeled_tasks = serializers.BooleanField(required=False, default=True)
     
     def validate_project_id(self, value):
         """Validate project exists and user has access"""
@@ -72,6 +73,7 @@ class EvaluationSerializer(serializers.ModelSerializer):
             'llm_model',
             'model_provider',
             'system_prompt',
+            'only_labeled_tasks',
             'status',
             'created_at',
             'updated_at',
